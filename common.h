@@ -18,7 +18,11 @@ static inline float ReadFloat(void* h)               { return cleo->ReadParam(h)
 static inline void  ReadStr(void* h, char* b, int n) { cleo->ReadStringLong(h, b, n); }
 static inline void  OutInt(void* h, int v)           { cleo->GetPointerToScriptVar(h)->i = v; }
 static inline void  OutFloat(void* h, float v)       { cleo->GetPointerToScriptVar(h)->f = v; }
-static inline void  Cond(void* h, bool b)            { cleo->SetScriptCondResult(h, b); }
+void* Sym(const char* name);
+static inline void  Cond(void* h, bool b) {
+    static auto fn = (void (*)(void*, uint8_t))Sym("_ZN14CRunningScript17UpdateCompareFlagEh");
+    if (fn) fn(h, b ? 1 : 0);
+}
 // ===========================================================================================
 
 // ---- RenderWare (opaque types; all calls resolved by symbol name from libGTASA.so 2.10) ----
