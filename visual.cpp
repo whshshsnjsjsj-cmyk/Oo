@@ -40,7 +40,7 @@ static RpClump* ClumpFromDff(const char* path) {
     auto it = cache.find(abs);
     if (it == cache.end()) {
         std::ifstream f(abs, std::ios::binary);
-        if (!f) { logger->Error("DFF not found: %s", abs.c_str()); return nullptr; }
+        if (!f) { FileLog("DFF not found: %s", abs.c_str()); return nullptr; }
         std::vector<uint8_t> buf((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
         it = cache.emplace(abs, std::move(buf)).first;
     }
@@ -50,7 +50,7 @@ static RpClump* ClumpFromDff(const char* path) {
     RpClump* c = nullptr;
     if (RW.StreamFindChunk(s, RW_ID_CLUMP, nullptr, nullptr)) c = RW.ClumpStreamRead(s);
     RW.StreamClose(s, nullptr);
-    if (!c) logger->Error("bad DFF: %s", abs.c_str());
+    if (!c) FileLog("bad DFF: %s", abs.c_str());
     return c;
 }
 
@@ -110,7 +110,7 @@ static RwTexture* PngTexture(const char* path) {
         RW.ImageFindRasterFormat(img, RW_RASTER_TEXTURE, &w, &h, &d, &fmt);
         if (RwRaster* r = RW.RasterCreate(w, h, d, fmt)) { RW.RasterSetFromImage(r, img); t = RW.TextureCreate(r); }
         RW.ImageDestroy(img);
-    } else logger->Error("PNG load failed: %s", abs.c_str());
+    } else FileLog("PNG load failed: %s", abs.c_str());
     cache[abs] = t;
     return t;
 }
@@ -181,14 +181,14 @@ OPC(SET_TEXTURE_PNG) {            // 601F: obj, path, material index
 }
 
 void RegisterOpcodes() {
-    if (!RwInit()) { logger->Error("RenderWare symbols missing - VisualObject disabled"); return; }
+    if (!RwInit()) { FileLog("RenderWare symbols missing - VisualObject disabled"); return; }
     if (!HookPedVtable(VT_RENDER, (void*)hook_Render, (void**)&orig_Render, "_ZN4CPed6RenderEv") ||
         !HookPedVtable(VT_DELETE_RW_OBJECT, (void*)hook_Delete, (void**)&orig_Delete, "_ZN4CPed14DeleteRwObjectEv")) {
-        logger->Error("could not hook CPed - VisualObject disabled"); return;
+        FileLog("could not hook CPed - VisualObject disabled"); return;
     }
-    cleo->RegisterOpcode(0x6000, CREATE_FROM_DFF);   cleo->RegisterOpcode(0x6001, SET_SCALE);
-    cleo->RegisterOpcode(0x6002, DELETE_VO);         cleo->RegisterOpcode(0x6003, AUTO_HIDE);
-    cleo->RegisterOpcode(0x6004, SET_VISIBLE);       cleo->RegisterOpcode(0x6009, CREATE_FROM_MODEL_ID);
-    cleo->RegisterOpcode(0x6011, IS_VISIBLE);        cleo->RegisterOpcode(0x6018, IS_MODEL_ID);        cleo->RegisterOpcode(0x6019, IS_DFF);
-    cleo->RegisterOpcode(0x601F, SET_TEXTURE_PNG);
+    Reg(0x6000, CREATE_FROM_DFF);   Reg(0x6001, SET_SCALE);
+    Reg(0x6002, DELETE_VO);         Reg(0x6003, AUTO_HIDE);
+    Reg(0x6004, SET_VISIBLE);       Reg(0x6009, CREATE_FROM_MODEL_ID);
+    Reg(0x6011, IS_VISIBLE);        Reg(0x6018, IS_MODEL_ID);        Reg(0x6019, IS_DFF);
+    Reg(0x601F, SET_TEXTURE_PNG);
 }

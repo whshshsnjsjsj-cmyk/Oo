@@ -9,17 +9,28 @@
 #include "cleo.h"
 
 extern cleo_ifs_t* cleo;
+void        FileLog(const char* fmt, ...);        // writes cleo64plugins.log next to the game data (see README)
+const char* CleoStorageDir();                      // CLEO's own storage dir, or nullptr if unavailable
 
 // ===================== ADAPT: the ONLY code that touches the CLEO SDK =====================
 // If the build fails here, the names below must be matched to the cleo.h of your CLEO build.
-#define OPC(fn) static void fn(void* h, uint32_t* ip, uint16_t opcode, const char* name)
+#define OPC(fn) \
+    static void fn##_impl(void* h, uint32_t* ip, uint16_t opcode, const char* name); \
+    static void fn(void* h, uint32_t* ip, uint16_t opcode, const char* name) { \
+        static bool first = true; if (first) { first = false; FileLog("first call: %s (%04X)", #fn, opcode); } \
+        fn##_impl(h, ip, opcode, name); } \
+    static void fn##_impl(void* h, uint32_t* ip, uint16_t opcode, const char* name)
+static inline void Reg(uint16_t op, cleo_ifs_t::opcode_handler_t fn) {
+    bool ok = cleo->RegisterOpcode(op, fn);
+    FileLog("RegisterOpcode %04X -> %d", op, (int)ok);
+}
 static inline int   ReadInt(void* h)                 { return cleo->ReadParam(h)->i; }
 static inline float ReadFloat(void* h)               { return cleo->ReadParam(h)->f; }
 static inline void  ReadStr(void* h, char* b, int n) { cleo->ReadStringLong(h, b, n); }
 static inline void  OutInt(void* h, int v)           { cleo->GetPointerToScriptVar(h)->i = v; }
 static inline void  OutFloat(void* h, float v)       { cleo->GetPointerToScriptVar(h)->f = v; }
 void* Sym(const char* name);
-static inline void  Cond(void* h, bool b) {
+static inline void  Cond(void* h, bool b) {   // CRunningScript::UpdateCompareFlag(unsigned char) from libGTASA.so
     static auto fn = (void (*)(void*, uint8_t))Sym("_ZN14CRunningScript17UpdateCompareFlagEh");
     if (fn) fn(h, b ? 1 : 0);
 }

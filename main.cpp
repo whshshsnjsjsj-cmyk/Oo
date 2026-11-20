@@ -9,8 +9,12 @@ MYMODCFG(net.juniordjjr.rusjj.cleoplus, CLEOPlus arm64 subset, 1.0.0, local buil
 #endif
 
 extern "C" void OnAllModsLoaded() {
+    FileLog("OnAllModsLoaded");
     cleo = (cleo_ifs_t*)GetInterface("CLEO");
-    if (!cleo) { logger->Error("CLEO interface not found - plugin inactive"); return; }
+    FileLog("GetInterface(CLEO) = %p, GetInterface(CLEOAddon) = %p", (void*)cleo, (void*)GetInterface("CLEOAddon"));
+    if (!cleo) { FileLog("CLEO interface not found - plugin inactive"); return; }
+    if (const char* d = CleoStorageDir()) FileLog("cleo storage dir: %s", d);
+    else FileLog("cleo storage dir: unavailable");
     RegisterOpcodes();
-    logger->Info("opcodes registered");
+    FileLog("opcodes registered");
 }

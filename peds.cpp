@@ -6,8 +6,32 @@
 #include <cstdio>
 #include <cctype>
 #include <vector>
+#include <cstdarg>
 
 static void* g_gta = nullptr;
+
+void FileLog(const char* fmt, ...) {
+    static FILE* f = nullptr; static bool tried = false;
+    if (!tried) {
+        tried = true;
+        char cmd[128] = {0};
+        if (FILE* c = fopen("/proc/self/cmdline", "r")) { fread(cmd, 1, sizeof(cmd) - 1, c); fclose(c); }
+        for (const char* root : { "/storage/emulated/0/Android_unprotected/data/", "/storage/emulated/0/Android/data/" }) {
+            std::string p = std::string(root) + cmd + "/cleo64plugins.log";
+            f = fopen(p.c_str(), "a");
+            if (f) break;
+        }
+    }
+    if (!f) return;
+#ifdef BUILD_VISUALOBJECT
+    fputs("[VO] ", f);
+#else
+    fputs("[PLUS] ", f);
+#endif
+    va_list ap; va_start(ap, fmt); vfprintf(f, fmt, ap); va_end(ap);
+    fputc('\n', f); fflush(f);
+}
+
 RwApi RW;
 
 void* Sym(const char* name) {
@@ -20,7 +44,7 @@ void* Sym(const char* name) {
 
 bool RwInit() {
     bool ok = true;
-#define L(f, n) do { RW.f = (decltype(RW.f))Sym(n); if (!RW.f) { logger->Error("missing symbol: %s", n); ok = false; } } while (0)
+#define L(f, n) do { RW.f = (decltype(RW.f))Sym(n); if (!RW.f) { FileLog("missing symbol: %s", n); ok = false; } } while (0)
     L(StreamOpen,        "_Z12RwStreamOpen12RwStreamType18RwStreamAccessTypePKv");
     L(StreamClose,       "_Z13RwStreamCloseP8RwStreamPv");
     L(StreamFindChunk,   "_Z17RwStreamFindChunkP8RwStreamjPjS1_");
@@ -91,7 +115,7 @@ void* PedClump(void* ped) {
         if (pl) {
             for (int off = 0x10; off <= 0x80; off += 8)
                 if (LooksLikeClump(*(void**)((char*)pl + off))) { g_clumpOff = off; break; }
-            logger->Info("CPed clump offset: %s 0x%x", g_clumpOff < 0 ? "NOT FOUND, default" : "found", g_clumpOff < 0 ? 0x20 : g_clumpOff);
+            FileLog("CPed clump offset: %s 0x%x", g_clumpOff < 0 ? "NOT FOUND, default" : "found", g_clumpOff < 0 ? 0x20 : g_clumpOff);
             if (g_clumpOff < 0) g_clumpOff = 0x20;
         } else return LooksLikeClump(*(void**)((char*)ped + 0x20)) ? *(void**)((char*)ped + 0x20) : nullptr;
     }
@@ -99,44 +123,54 @@ void* PedClump(void* ped) {
     return LooksLikeClump(c) ? c : nullptr;
 }
 
+const char* CleoStorageDir() {
+    if (!cleo || !cleo->GetCleoStorageDir) return nullptr;
+    Dl_info di;     // only call it if the pointer really lives inside the CLEO library
+    if (!dladdr((void*)cleo->GetCleoStorageDir, &di) || !di.dli_fname || !strstr(di.dli_fname, "cleo")) return nullptr;
+    const char* s = cleo->GetCleoStorageDir();
+    return (s && SafeRead(s, 8)) ? s : nullptr;
+}
+
 std::string ResolvePath(const char* in) {
     std::string p(in ? in : "");
     for (auto& c : p) if (c == '\\') c = '/';
     if (access(p.c_str(), F_OK) == 0) return p;
     std::vector<std::string> bases;
-    if (cleo && cleo->GetCleoStorageDir) {
-        std::string s = cleo->GetCleoStorageDir() ? cleo->GetCleoStorageDir() : "";
+    if (const char* cs = CleoStorageDir()) {
+        std::string s = cs;
         while (!s.empty() && s.back() == '/') s.pop_back();
         if (!s.empty()) { bases.push_back(s + "/"); size_t k = s.rfind('/'); if (k != std::string::npos) bases.push_back(s.substr(0, k + 1)); }
     }
     char cmd[128] = {0};
-    FILE* f = fopen("/proc/self/cmdline", "r");
-    if (f) { fread(cmd, 1, sizeof(cmd) - 1, f); fclose(f); }
+    if (FILE* f = fopen("/proc/self/cmdline", "r")) { fread(cmd, 1, sizeof(cmd) - 1, f); fclose(f); }
     std::string pkg(cmd);
     for (const char* root : { "/storage/emulated/0/Android_unprotected/data/", "/storage/emulated/0/Android/data/" }) {
-        std::string b = std::string(root) + pkg + "/files/";
+        std::string b = std::string(root) + pkg + "/";
+        bases.push_back(b + "files/"); bases.push_back(b + "files/cleo/"); bases.push_back(b + "files/CLEO/");
         bases.push_back(b); bases.push_back(b + "cleo/"); bases.push_back(b + "CLEO/");
     }
     for (auto& b : bases) { std::string c = b + p; if (access(c.c_str(), F_OK) == 0) return c; }
+    static int misses = 0;
+    if (misses++ < 100) FileLog("path not found: %s", p.c_str());
     return p;
 }
 
 bool HookPedVtable(int slot, void* hook, void** orig, const char* origSym) {
     char* vt = (char*)Sym("_ZTV4CPed");
     void* expect = Sym(origSym);
-    if (!vt || !expect) { logger->Error("vtable/symbol not found (%s)", origSym); return false; }
+    if (!vt || !expect) { FileLog("vtable/symbol not found (%s)", origSym); return false; }
     uintptr_t* slots = (uintptr_t*)(vt + 16);
     uintptr_t cur = slots[slot];
     if (cur != (uintptr_t)expect) {
         Dl_info di;
         if (!dladdr((void*)cur, &di) || !di.dli_fname || strstr(di.dli_fname, "libGTASA")) {
-            logger->Error("CPed vtable slot %d does not match %s - wrong game build?", slot, origSym);
+            FileLog("CPed vtable slot %d does not match %s - wrong game build?", slot, origSym);
             return false;
         }                                                      // else: another mod already hooked it, chain
     }
     long pg = sysconf(_SC_PAGESIZE);
     uintptr_t a = (uintptr_t)&slots[slot] & ~(uintptr_t)(pg - 1);
-    if (mprotect((void*)a, pg * 2, PROT_READ | PROT_WRITE) != 0) { logger->Error("mprotect failed"); return false; }
+    if (mprotect((void*)a, pg * 2, PROT_READ | PROT_WRITE) != 0) { FileLog("mprotect failed"); return false; }
     *orig = (void*)cur;
     slots[slot] = (uintptr_t)hook;
     mprotect((void*)a, pg * 2, PROT_READ);

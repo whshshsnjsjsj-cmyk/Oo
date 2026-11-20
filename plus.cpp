@@ -84,11 +84,11 @@ static void hook_Delete(void* ped) { g_flag.erase((int)(uintptr_t)ped); orig_Del
 
 void RegisterOpcodes() {
     HookPedVtable(VT_DELETE_RW_OBJECT, (void*)hook_Delete, (void**)&orig_Delete, "_ZN4CPed14DeleteRwObjectEv");
-    cleo->RegisterOpcode(0x0E4D, RANDOM_PERCENT);        cleo->RegisterOpcode(0x0E0B, MARK_CHAR_AS_NEEDED);
-    cleo->RegisterOpcode(0x0E0A, IS_CHAR_SCRIPT_CONTROLLED);
-    cleo->RegisterOpcode(0x0EE4, DIST_CHAR_CHAR);        cleo->RegisterOpcode(0x0EEA, DIST_CHAR_COORDS);
-    cleo->RegisterOpcode(0x0D59, GET_WEATHER);           cleo->RegisterOpcode(0x0E40, GET_HOUR);
-    cleo->RegisterOpcode(0x0D4E, READ_STRUCT);           cleo->RegisterOpcode(0x0E28, WRITE_STRUCT);
-    cleo->RegisterOpcode(0x0EC0, ADD_FX_PARTICLE);
-    cleo->RegisterOpcode(0x0AF0, READ_INT_FROM_INI);
+    Reg(0x0E4D, RANDOM_PERCENT);        Reg(0x0E0B, MARK_CHAR_AS_NEEDED);
+    Reg(0x0E0A, IS_CHAR_SCRIPT_CONTROLLED);
+    Reg(0x0EE4, DIST_CHAR_CHAR);        Reg(0x0EEA, DIST_CHAR_COORDS);
+    Reg(0x0D59, GET_WEATHER);           Reg(0x0E40, GET_HOUR);
+    Reg(0x0D4E, READ_STRUCT);           Reg(0x0E28, WRITE_STRUCT);
+    Reg(0x0EC0, ADD_FX_PARTICLE);
+    Reg(0x0AF0, READ_INT_FROM_INI);
 }
