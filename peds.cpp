@@ -5,6 +5,7 @@
 #include <cstring>
 #include <cstdio>
 #include <cctype>
+#include <vector>
 
 static void* g_gta = nullptr;
 RwApi RW;
@@ -102,12 +103,21 @@ std::string ResolvePath(const char* in) {
     std::string p(in ? in : "");
     for (auto& c : p) if (c == '\\') c = '/';
     if (access(p.c_str(), F_OK) == 0) return p;
+    std::vector<std::string> bases;
+    if (cleo && cleo->GetCleoStorageDir) {
+        std::string s = cleo->GetCleoStorageDir() ? cleo->GetCleoStorageDir() : "";
+        while (!s.empty() && s.back() == '/') s.pop_back();
+        if (!s.empty()) { bases.push_back(s + "/"); size_t k = s.rfind('/'); if (k != std::string::npos) bases.push_back(s.substr(0, k + 1)); }
+    }
     char cmd[128] = {0};
     FILE* f = fopen("/proc/self/cmdline", "r");
     if (f) { fread(cmd, 1, sizeof(cmd) - 1, f); fclose(f); }
-    std::string pkg(cmd), base = "/storage/emulated/0/Android/data/" + pkg + "/files/";
-    const char* dirs[] = { "", "cleo/", "CLEO/", "Cleo/" };
-    for (auto d : dirs) { std::string c = base + d + p; if (access(c.c_str(), F_OK) == 0) return c; }
+    std::string pkg(cmd);
+    for (const char* root : { "/storage/emulated/0/Android_unprotected/data/", "/storage/emulated/0/Android/data/" }) {
+        std::string b = std::string(root) + pkg + "/files/";
+        bases.push_back(b); bases.push_back(b + "cleo/"); bases.push_back(b + "CLEO/");
+    }
+    for (auto& b : bases) { std::string c = b + p; if (access(c.c_str(), F_OK) == 0) return c; }
     return p;
 }
 

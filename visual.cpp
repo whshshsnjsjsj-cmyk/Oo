@@ -9,7 +9,7 @@
 struct VO {
     int id; void* ped; RpClump* clump; RwFrame* root;
     int bone; RwV3d off, rot, scl; bool visible; int hideDead, hideWeapon, hideCar;
-    std::string dff;
+    std::string dff; int modelId;
 };
 static std::unordered_map<int, VO> g_vos;
 static std::unordered_map<void*, std::vector<int>> g_byPed;
@@ -72,7 +72,7 @@ static int Create(void* ped, const char* dff, int modelId, int bone, RwV3d off, 
     RwFrame* root = ClumpFrame(c);
     if (!root) { RW.ClumpDestroy(c); return -1; }
     VO v = {}; v.id = g_nextId++; v.ped = ped; v.clump = c; v.root = root; v.bone = bone;
-    v.off = off; v.rot = rot; v.scl = {1, 1, 1}; v.visible = true; v.dff = dff ? Norm(dff) : "";
+    v.off = off; v.rot = rot; v.scl = {1, 1, 1}; v.visible = true; v.dff = dff ? Norm(dff) : ""; v.modelId = dff ? -1 : modelId;
     RW.FrameAddChild(boneFrame, root);
     ApplyTransform(v);
     g_byPed[ped].push_back(v.id);
@@ -168,6 +168,10 @@ OPC(IS_DFF) {                     // 6019: obj, path
     int id = ReadInt(h); char path[260]; ReadStr(h, path, sizeof path);
     auto it = g_vos.find(id); Cond(h, it != g_vos.end() && it->second.dff == Norm(path));
 }
+OPC(IS_MODEL_ID) {                // 6018: obj, model id
+    int id = ReadInt(h); int m = ReadInt(h);
+    auto it = g_vos.find(id); Cond(h, it != g_vos.end() && it->second.modelId == m);
+}
 OPC(SET_TEXTURE_PNG) {            // 601F: obj, path, material index
     int id = ReadInt(h); char path[260]; ReadStr(h, path, sizeof path); int mat = ReadInt(h);
     auto it = g_vos.find(id); if (it == g_vos.end()) return;
@@ -185,6 +189,6 @@ void RegisterOpcodes() {
     cleo->RegisterOpcode(0x6000, CREATE_FROM_DFF);   cleo->RegisterOpcode(0x6001, SET_SCALE);
     cleo->RegisterOpcode(0x6002, DELETE_VO);         cleo->RegisterOpcode(0x6003, AUTO_HIDE);
     cleo->RegisterOpcode(0x6004, SET_VISIBLE);       cleo->RegisterOpcode(0x6009, CREATE_FROM_MODEL_ID);
-    cleo->RegisterOpcode(0x6011, IS_VISIBLE);        cleo->RegisterOpcode(0x6019, IS_DFF);
+    cleo->RegisterOpcode(0x6011, IS_VISIBLE);        cleo->RegisterOpcode(0x6018, IS_MODEL_ID);        cleo->RegisterOpcode(0x6019, IS_DFF);
     cleo->RegisterOpcode(0x601F, SET_TEXTURE_PNG);
 }

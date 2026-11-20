@@ -2,6 +2,10 @@
 #include "common.h"
 #include <random>
 #include <unordered_map>
+#include <fstream>
+#include <string>
+#include <cctype>
+#include <cstdlib>
 
 static std::mt19937 g_rng{ std::random_device{}() };
 
@@ -43,6 +47,38 @@ OPC(ADD_FX_PARTICLE) {                                                          
     for (int i = 0; i < 14; i++) cleo->ReadParam(h);
 }
 
+
+// 0AF0: path, section, key -> int (IniFiles plugin has no arm64 build, so it is provided here)
+static std::string Trim(std::string s) {
+    size_t a = s.find_first_not_of(" \t\r\n"), b = s.find_last_not_of(" \t\r\n");
+    return a == std::string::npos ? "" : s.substr(a, b - a + 1);
+}
+static std::string Lower(std::string s) { for (auto& c : s) c = (char)tolower((unsigned char)c); return s; }
+static bool IniReadInt(const char* path, const char* section, const char* key, int& out) {
+    std::ifstream f(ResolvePath(path));
+    if (!f) return false;
+    std::string line, cur, sec = Lower(section), k = Lower(key);
+    while (std::getline(f, line)) {
+        line = Trim(line);
+        if (line.empty() || line[0] == ';' || line[0] == '#') continue;
+        if (line[0] == '[') { size_t e = line.find(']'); cur = Lower(Trim(line.substr(1, e == std::string::npos ? std::string::npos : e - 1))); continue; }
+        size_t eq = line.find('=');
+        if (eq == std::string::npos || cur != sec) continue;
+        if (Lower(Trim(line.substr(0, eq))) != k) continue;
+        std::string v = line.substr(eq + 1);
+        size_t sc = v.find(';'); if (sc != std::string::npos) v = v.substr(0, sc);
+        out = atoi(Trim(v).c_str());
+        return true;
+    }
+    return false;
+}
+OPC(READ_INT_FROM_INI) {
+    char path[260], sec[128], key[128];
+    ReadStr(h, path, sizeof path); ReadStr(h, sec, sizeof sec); ReadStr(h, key, sizeof key);
+    int v = 0; bool ok = IniReadInt(path, sec, key, v);
+    OutInt(h, v); Cond(h, ok);
+}
+
 static void (*orig_Delete)(void*) = nullptr;
 static void hook_Delete(void* ped) { g_flag.erase((int)(uintptr_t)ped); orig_Delete(ped); }
 
@@ -54,4 +90,5 @@ void RegisterOpcodes() {
     cleo->RegisterOpcode(0x0D59, GET_WEATHER);           cleo->RegisterOpcode(0x0E40, GET_HOUR);
     cleo->RegisterOpcode(0x0D4E, READ_STRUCT);           cleo->RegisterOpcode(0x0E28, WRITE_STRUCT);
     cleo->RegisterOpcode(0x0EC0, ADD_FX_PARTICLE);
+    cleo->RegisterOpcode(0x0AF0, READ_INT_FROM_INI);
 }
