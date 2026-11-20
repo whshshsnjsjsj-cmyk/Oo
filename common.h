@@ -1,5 +1,7 @@
 // Shared declarations for the arm64 CLEO_VisualObject / CLEOPlus replacements (GTA SA 2.10).
 #pragma once
+#include <cstdint>
+#include <cstddef>
 #include <string>
 #include <mod/config.h>
 #include <mod/amlmod.h>
